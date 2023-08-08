@@ -1,0 +1,340 @@
+
+
+<!doctype html>
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+<script src="{{ url_for('static', filename='socket.io.js') }}"></script>
+
+<div id="mpos"></div> <br/>
+<div id="fracpos"></div> <br/>
+<div id="config"></div> <br/>
+
+<canvas id="chip_png" width="500" height="500"></canvas>
+
+<br/>
+
+<!-- GET: -->
+<!-- <ul> -->
+    <!-- <li><a href="{{ url_for('sync')}}">sync</a></li> -->
+    <!-- <li><a href="{{ url_for('config')}}">config</a></li> -->
+    <!-- <li><a href="{{ url_for('home')}}">home</a></li> -->
+    <!-- <li><a href="{{ url_for('set_ref', a_x=78.6, a_y=87.6, a_z=-15.3, b_x=87.6, b_y=78.6, b_z=-15.3)}}">set test ref</a></li> -->
+    <!-- <li><a href="{{ url_for('set_hop', z=-10)}}">set test hop</a></li> -->
+    <!-- <li><a href="{{ url_for('go_ref', a=1)}}">go a</a></li>
+    <li><a href="{{ url_for('go_ref', b=1)}}">go b</a></li>     -->
+<!-- </ul> -->
+<!-- POST: -->
+<!-- <ul> -->
+    <!-- <li><button id="syncButton">sync</button></li> -->
+    <!-- <li><button id="homeButton">home</button></li> -->
+    <!-- <li><button id="setRefButton">set_ref test values</button></li> -->
+    <!-- <li><button id="setHopButton">set_hop test values</button></li> -->
+</ul>
+
+Config: <br/>
+
+<textarea id="postConfig" oninput='this.style.height = "";this.style.height = this.scrollHeight + "px"' onclick='this.style.height = "";this.style.height = this.scrollHeight + "px"'></textarea>
+<br/>
+<button id="postConfigButton">post config</button>
+<br/>
+<br/>
+
+Move: <br/>
+
+<input id="absX"></input><button id="absXButton">move abs x</button><br/>
+<input id="absY"></input><button id="absYButton">move abs y</button><br/>
+<input id="absZ"></input><button id="absZButton">move abs z</button><br/>
+<br/>
+
+GOTO: <button id="goRefAButton">GO A</button>
+<button id="goRefBButton">GO B</button>
+<button id="homeButton">HOME</button>
+<br/>
+<br/>
+
+SET: 
+<button id="setRefCurrentAButton">SET A</button>
+<button id="setRefCurrentBButton">SET B</button>
+<button id="setHopCurrentButton">SET Z AS HOP</button>
+<br/>
+<br/>
+
+Raw cmd: <br/>
+<input id="rawCmd"></input><button id="rawCmdButton">send cmd</button><br/>
+<br/>
+
+<button id="syncButton">SYNC</button>
+<br/>
+<br/>
+
+Last ret: <div id="last_ret"></div>
+
+<br/>
+
+{% for k,v in prover.items() %}
+{{k}}: {{v}} <br/>
+{% endfor %}
+
+<img id="baksdflksadl" src="{{url_for('static', filename='chip.png')}}" alt="chip.png" width="0px" height="0px"/>
+
+<script>
+var chip_png = new Image(700, 700);
+chip_png.src = "{{url_for('static', filename='chip.png')}}";
+var chip_canvas = document.getElementById('chip_png');
+var chip_context = chip_canvas.getContext("2d");
+
+// sync input fields once on page load
+window.onload = (event) => {
+    fetch("{{url_for('config')}}", {
+        method: "GET"
+    }).then(resp => {
+        return resp.json();
+    }).then(resp => {
+        console.log(resp);
+        document.getElementById('postConfig').value = JSON.stringify(resp, null, " ");
+        console.log(document.getElementById('postConfig').value);
+    });
+}
+
+function update_pos(data) {
+    document.getElementById("mpos").textContent = JSON.stringify(data['mpos']);
+    document.getElementById("fracpos").textContent = JSON.stringify(data['fracpos']);
+    document.getElementById("config").textContent = JSON.stringify(data['config']);
+    chip_context.reset();
+    chip_context.drawImage(chip_png, 0, 0, 500, 500);
+    chip_context.fillStyle = "red";
+    
+    if (data['fracpos']) {
+        chip_context.fillRect(data['fracpos']['x'] * 500 - 5, 500 - data['fracpos']['y'] * 500 - 5, 10, 10);
+    }
+}
+
+var socket = io();
+socket.on('pos_resp', function(data) {
+    // console.log(data);
+    update_pos(data);
+
+    // ask for the next sync in 1000ms
+    setTimeout(function (){
+        socket.emit('pos_req');
+    }, 100);
+});
+
+// initial sync
+socket.emit('pos_req');
+
+document.getElementById('syncButton').addEventListener("click", async () => {
+    await fetch("{{url_for('sync')}}", {
+        method: "POST"
+    }).then(resp => {
+        return resp.json();
+    }).then(resp => {
+        document.getElementById('last_ret').textContent = JSON.stringify(resp);
+    });
+});
+
+document.getElementById('homeButton').addEventListener("click", async () => {
+    await fetch("{{url_for('home')}}", {
+        method: "POST"
+    }).then(resp => {
+        return resp.json();
+    }).then(resp => {
+        document.getElementById('last_ret').textContent = JSON.stringify(resp);
+    });
+});
+
+// document.getElementById('setRefButton').addEventListener("click", async () => {
+//     await fetch("{{url_for('set_ref')}}", {
+//         method: "POST",
+//         headers: {
+//             "Content-Type": "application/json",
+//         },
+//         body: JSON.stringify({
+//             "a_x": 78.6,
+//             "a_y": 87.6,
+//             "a_z": -15.3,
+//             "b_x": 87.6,
+//             "b_y": 78.6,
+//             "b_z": -15.3,
+//         })
+//     }).then(resp => {
+//         return resp.json();
+//     }).then(resp => {
+//         document.getElementById('last_ret').textContent = resp;
+//     });
+// });
+
+// document.getElementById('setHopButton').addEventListener("click", async () => {
+//     await fetch("{{url_for('set_hop')}}", {
+//         method: "POST",
+//         headers: {
+//             "Content-Type": "application/json",
+//         },
+//         body: JSON.stringify({
+//             "z": -10,
+//         })
+//     }).then(resp => {
+//         return resp.json();
+//     }).then(resp => {
+//         document.getElementById('last_ret').textContent = resp;
+//     });
+// });
+
+document.getElementById('setRefCurrentAButton').addEventListener("click", async () => {
+    await fetch("{{url_for('set_ref')}}", {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+            "set_a": 1,
+        })
+    }).then(resp => {
+        return resp.json();
+    }).then(resp => {
+        document.getElementById('last_ret').textContent = JSON.stringify(resp);
+    });
+});
+
+document.getElementById('setRefCurrentBButton').addEventListener("click", async () => {
+    await fetch("{{url_for('set_ref')}}", {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+            "set_b": 1,
+        })
+    }).then(resp => {
+        return resp.json();
+    }).then(resp => {
+        document.getElementById('last_ret').textContent = JSON.stringify(resp);
+    });
+});
+
+document.getElementById('setHopCurrentButton').addEventListener("click", async () => {
+    await fetch("{{url_for('set_hop')}}", {
+        method: "POST"
+    }).then(resp => {
+        return resp.json();
+    }).then(resp => {
+        document.getElementById('last_ret').textContent = JSON.stringify(resp);
+    });
+});
+
+document.getElementById('goRefAButton').addEventListener("click", async () => {
+    await fetch("{{url_for('go_ref')}}", {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+            "a": 1,
+        })
+    }).then(resp => {
+        return resp.json();
+    }).then(resp => {
+        document.getElementById('last_ret').textContent = JSON.stringify(resp);
+    });
+});
+
+document.getElementById('goRefBButton').addEventListener("click", async () => {
+    await fetch("{{url_for('go_ref')}}", {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+            "b": 1,
+        })
+    }).then(resp => {
+        return resp.json();
+    }).then(resp => {
+        document.getElementById('last_ret').textContent = JSON.stringify(resp);
+    });
+});
+
+document.getElementById('postConfigButton').addEventListener("click", async () => {
+    console.log(document.getElementById('postConfig').value);
+    await fetch("{{url_for('config')}}", {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+        },
+        body: document.getElementById('postConfig').value
+    }).then(resp => {
+        return resp.json();
+    }).then(resp => {
+        document.getElementById('last_ret').textContent = JSON.stringify(resp);
+    });
+});
+
+document.getElementById('absXButton').addEventListener("click", async () => {
+    console.log(document.getElementById('config').value);
+    await fetch("{{url_for('move')}}", {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+            'x': parseFloat(document.getElementById('absX').value)
+        })
+    }).then(resp => {
+        return resp.json();
+    }).then(resp => {
+        document.getElementById('last_ret').textContent = JSON.stringify(resp);
+    });
+});
+
+document.getElementById('absYButton').addEventListener("click", async () => {
+    console.log(document.getElementById('config').value);
+    await fetch("{{url_for('move')}}", {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+            'y': parseFloat(document.getElementById('absY').value)
+        })
+    }).then(resp => {
+        return resp.json();
+    }).then(resp => {
+        document.getElementById('last_ret').textContent = JSON.stringify(resp);
+    });
+});
+
+document.getElementById('absZButton').addEventListener("click", async () => {
+    console.log(document.getElementById('config').value);
+    await fetch("{{url_for('move')}}", {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+            'z': parseFloat(document.getElementById('absZ').value)
+        })
+    }).then(resp => {
+        return resp.json();
+    }).then(resp => {
+        document.getElementById('last_ret').textContent = JSON.stringify(resp);
+    });
+});
+
+document.getElementById('rawCmdButton').addEventListener("click", async () => {
+    console.log(document.getElementById('config').value);
+    await fetch("{{url_for('raw_cmd')}}", {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+            'cmd': document.getElementById('rawCmd').value
+        })
+    }).then(resp => {
+        return resp.json();
+    }).then(resp => {
+        document.getElementById('last_ret').textContent = JSON.stringify(resp);
+    });
+});
+
+
+</script>
