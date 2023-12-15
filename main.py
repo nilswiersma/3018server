@@ -27,9 +27,9 @@ GCODE_MOVE = 'G0'
 
 def find_3018():
     for port in list_ports.comports():
-        if '1A86:7523' in port.usb_info():
+        if port.vid == 0x1a86 and port.pid == 0x7523:
             return port.device
-    return None
+    raise Exception('Cannot find any device with vid = 0x1a86 and pid = 0x7523')
 
 class XYZPosition():
     def __init__(self, x, y, z=0):
